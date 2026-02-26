@@ -52,5 +52,5 @@ npm run build
 
 ## Author
 
-Created by [@for-everyoung12](https://github.com/for-everyoung12)  
+Created by [@for-everyoung12](https://github.com/haison-dev)  
 Just a dude who likes music, pixel art, and writing clean UI without bloat.
