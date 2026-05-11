@@ -1,15 +1,27 @@
 {
-  "name": "music-player",
-  "version": "1.0.0",
-  "description": "Simple Electron music player",
-  "main": "main.js",
+  "name": "music-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spotify/SoundCloud-style music platform with Electron desktop and NestJS API.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-  "start": "electron .",
-  "build": "electron-packager . music-player --platform=win32 --arch=x64 --icon=assets/icons/icon.ico --overwrite"
+    "dev": "concurrently -n api,desktop -c cyan,green \"npm run dev -w @music/api\" \"npm run dev -w @music/desktop\"",
+    "dev:api": "npm run dev -w @music/api",
+    "dev:desktop": "npm run dev -w @music/desktop",
+    "build": "npm run build -w @music/shared && npm run build -w @music/api && npm run build -w @music/desktop",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio"
   },
   "devDependencies": {
-    "electron": "^35.0.3",
-    "electron-packager": "^17.1.2",
-    "electron-reload": "^2.0.0-alpha.1"
+    "concurrently": "^9.1.2",
+    "prisma": "^6.8.2",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   }
 }
