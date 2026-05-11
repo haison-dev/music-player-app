@@ -14,6 +14,7 @@ type LibraryState = {
   playlists: Playlist[];
   uploadedTracks: TrackSummary[];
   selectedFolder: string | null;
+  followedArtistIds: string[];
   toggleLike: (trackId: string) => void;
   createPlaylist: (name: string) => Playlist;
   addTrackToPlaylist: (playlistId: string, trackId: string) => void;
@@ -29,6 +30,7 @@ export const useLibraryStore = create<LibraryState>()(
       playlists: [],
       uploadedTracks: [],
       selectedFolder: null,
+      followedArtistIds: [],
       toggleLike: (trackId) =>
         set((state) => ({
           likedTrackIds: state.likedTrackIds.includes(trackId)

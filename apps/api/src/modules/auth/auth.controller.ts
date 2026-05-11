@@ -1,5 +1,6 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Inject, Post } from '@nestjs/common';
 import { IsEmail, IsString, MinLength } from 'class-validator';
+import { AuthService } from './auth.service';
 
 class RegisterDto {
   @IsEmail()
@@ -12,6 +13,10 @@ class RegisterDto {
   @IsString()
   @MinLength(8)
   password!: string;
+
+  @IsString()
+  @MinLength(2)
+  displayName!: string;
 }
 
 class LoginDto {
@@ -24,22 +29,23 @@ class LoginDto {
 
 @Controller('auth')
 export class AuthController {
+  constructor(@Inject(AuthService) private readonly authService: AuthService) {}
+
   @Post('register')
   register(@Body() body: RegisterDto) {
-    return {
-      message: 'Auth module is ready. Password hashing and JWT issuing are the next step.',
-      user: {
-        email: body.email,
-        username: body.username,
-      },
-    };
+    return this.authService.register({
+      email: body.email,
+      username: body.username,
+      displayName: body.displayName,
+      password: body.password,
+    });
   }
 
   @Post('login')
   login(@Body() body: LoginDto) {
-    return {
-      message: 'Auth module is ready. Replace this stub with credential validation.',
+    return this.authService.login({
       email: body.email,
-    };
+      password: body.password,
+    });
   }
 }

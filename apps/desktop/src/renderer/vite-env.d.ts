@@ -9,6 +9,7 @@ interface Window {
     };
     library: {
       selectFolder: () => Promise<string | null>;
+      selectAudioFiles: () => Promise<string[]>;
     };
   };
 }

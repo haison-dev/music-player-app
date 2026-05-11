@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Post } from '@nestjs/common';
 import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { TracksService } from './tracks.service';
 
@@ -20,10 +20,10 @@ class CreateTrackDto {
 
 @Controller('tracks')
 export class TracksController {
-  constructor(private readonly tracksService: TracksService) {}
+  constructor(@Inject(TracksService) private readonly tracksService: TracksService) {}
 
   @Get('featured')
-  featured() {
+  async featured() {
     return this.tracksService.getFeatured();
   }
 
