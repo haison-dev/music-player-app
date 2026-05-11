@@ -1,51 +1,34 @@
 # Music Platform
 
-Spotify/SoundCloud-style music platform using Electron desktop, React/Vite frontend, NestJS backend, PostgreSQL, Prisma, Redis, and S3-compatible object storage.
+Spotify-like desktop music app built with Electron + React and a NestJS API.
 
-## Architecture
+## Monorepo Structure
 
 ```txt
 apps/
-  desktop/        Electron + React + Vite desktop client
-  api/            NestJS backend API
+  desktop/        Electron + React + Vite app
+  api/            NestJS API
 packages/
   shared/         Shared TypeScript types
 prisma/
-  schema.prisma   Production data model
+  schema.prisma
 docker-compose.yml
 ```
 
 ## Tech Stack
 
-- Desktop: Electron, React, Vite, Zustand, TanStack Query, React Router
-- API: NestJS, TypeScript, Prisma
-- Database: PostgreSQL
-- Cache / realtime support: Redis
-- Media storage: MinIO locally, compatible with AWS S3 or Cloudflare R2 later
-- Packaging: electron-builder
+- Desktop: Electron, React, Vite, Zustand, TanStack Query
+- API: NestJS, TypeScript, class-validator
+- Shared: TypeScript package (`@music/shared`)
+- Infra (prepared): PostgreSQL, Redis, MinIO via Docker Compose
 
-## Required Software
+## Requirements
 
-Install these on your machine:
+- Node.js `>=20.19.0`
+- npm
+- Docker Desktop (optional for infra services)
 
-- Node.js 20.19 or newer
-- npm 10 or newer
-- Docker Desktop
-- Git
-
-Optional but useful:
-
-- Prisma VS Code extension
-- PostgreSQL client such as TablePlus, DBeaver, or pgAdmin
-- MinIO Client (`mc`) if you want to manage buckets from terminal
-
-## Setup
-
-Create your local environment file:
-
-```bash
-copy .env.example .env
-```
+## Run Locally
 
 Install dependencies:
 
@@ -53,78 +36,18 @@ Install dependencies:
 npm install
 ```
 
-Start infrastructure:
-
-```bash
-docker compose up -d
-```
-
-Generate Prisma Client:
-
-```bash
-npm run db:generate
-```
-
-Create database tables:
-
-```bash
-npm run db:migrate -- --name init
-```
-
-Run the full system:
+Run both API + desktop:
 
 ```bash
 npm run dev
 ```
 
-Or run each side separately:
+Run separately:
 
 ```bash
 npm run dev:api
 npm run dev:desktop
 ```
-
-## Local Services
-
-- API health: `http://localhost:4000/health`
-- API routes: `http://localhost:4000/api`
-- Vite dev server: `http://127.0.0.1:5173`
-- PostgreSQL: `localhost:5432`
-- Redis: `localhost:6379`
-- MinIO API: `http://localhost:9000`
-- MinIO Console: `http://localhost:9001`
-
-MinIO credentials:
-
-```txt
-username: music
-password: music12345
-```
-
-## Current Features
-
-- Electron desktop shell with secure preload bridge
-- Spotify-style UI layout: sidebar, search, content, queue, player bar
-- NestJS API skeleton
-- Health endpoint
-- Auth module placeholder
-- Tracks module placeholder
-- Shared TypeScript contracts
-- Prisma data model for users, tracks, albums, playlists, likes, comments, follows, and listening history
-- Docker Compose for PostgreSQL, Redis, and MinIO
-
-## Next Implementation Steps
-
-1. Add real auth: password hashing, JWT access token, refresh token.
-2. Add S3/MinIO upload flow for audio and cover images.
-3. Persist tracks in PostgreSQL through Prisma.
-4. Add frontend login/register screens.
-5. Add upload track screen.
-6. Add playlist, like, comment, follow APIs.
-7. Add signed streaming URLs.
-8. Add local/offline cache for desktop playback.
-
-## Build
 
 Build all packages:
 
@@ -132,8 +55,47 @@ Build all packages:
 npm run build
 ```
 
-Package the desktop app:
+Package desktop app:
 
 ```bash
 npm run package -w @music/desktop
 ```
+
+## Local Endpoints
+
+- API base: `http://localhost:4000/api`
+- Health check: `http://localhost:4000/health`
+- Desktop Vite dev server: `http://127.0.0.1:5173`
+
+## Current Features
+
+### Desktop
+
+- Spotify-style 3-column layout (library, main content, now playing)
+- Home feed, search flow, profile view
+- Playlist view, like/unlike track, add/remove track to playlist
+- Queue panel + player bar controls
+- Sort/view controls in library
+- Uploads flow: choose local audio files from OS file picker, then add into library state
+
+### API (`/api`)
+
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /tracks/featured` (fetches online preview tracks from iTunes, fallback to local seed tracks)
+- `POST /tracks` (create draft track payload)
+- `GET /library?userId=...`
+- `POST /library/likes/toggle`
+- `POST /library/playlists`
+- `POST /library/playlists/:playlistId/tracks`
+- `DELETE /library/playlists/:playlistId/tracks/:trackId?userId=...`
+- `PATCH /library/selected-folder`
+- `POST /library/uploads`
+- `POST /library/follows/toggle`
+- `POST /actions/track` (UI action tracking)
+
+## Important Notes
+
+- Current auth/library data is in-memory (Map-based), not persisted across API restarts.
+- Prisma/PostgreSQL/Redis/MinIO are scaffolded in repo, but current core flow does not yet persist library/auth state to database.
+- Online featured tracks depend on network availability to iTunes API.
