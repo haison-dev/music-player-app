@@ -3,12 +3,7 @@ logs
 *.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-.pnpm-debug.log*
-
-# Diagnostic reports
-report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+pnpm-debug.log*
 
 # Runtime data
 pids
@@ -16,48 +11,33 @@ pids
 *.seed
 *.pid.lock
 
-# Instrumented libs
-lib-cov
-
 # Coverage
 coverage/
 *.lcov
 .nyc_output
 
-# Dependency dirs
+# Dependencies
 node_modules/
-bower_components/
-jspm_packages/
-web_modules/
 
-# Electron build output
+# Build output
 dist/
 out/
+release/
+build/Release/
 *.exe
 
-# Build addons
-build/Release
-
-# Vite/Vue/Parcel/etc cache
+# Tool caches
 .cache/
-.parcel-cache
+.parcel-cache/
 .temp/
+.turbo/
+.vite/
 
-# # Media (nếu không muốn track)
-# assets/songs/
-# assets/covers/
-# *.mp3
-# *.jpg
-# *.png
-
-# VSCode
-.vscode/
-
-# Dotenv
+# Local environment
 .env
 .env.*.local
 
-# Yarn/NPM garbage
+# Package manager state
 .yarn/cache
 .yarn/unplugged
 .yarn/build-state.yml
@@ -67,19 +47,14 @@ build/Release
 .npm
 *.tgz
 
-# Misc
-.node_repl_history
-.lock-wscript
-.eslintcache
-.stylelintcache
-
-# Serverless stuff
-.serverless/
-.docusaurus/
-.tern-port/
-.dynamodb/
-.vscode-test/
-
-# Ignore your own OS crap
+# Editors and OS files
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
+
+# Optional: uncomment if real copyrighted media should stay local only.
+# assets/songs/
+# assets/covers/
+# apps/desktop/public/assets/songs/
+# apps/desktop/public/assets/covers/

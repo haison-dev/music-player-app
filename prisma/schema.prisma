@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum TrackVisibility {
+  PUBLIC
+  UNLISTED
+  PRIVATE
+}
+
+model User {
+  id           String             @id @default(cuid())
+  email        String             @unique
+  username     String             @unique
+  passwordHash String
+  displayName  String
+  avatarUrl    String?
+  bio          String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  tracks       Track[]
+  playlists    Playlist[]
+  likes        TrackLike[]
+  comments     Comment[]
+  followers    Follow[]           @relation("followers")
+  following    Follow[]           @relation("following")
+  history      ListeningHistory[]
+}
+
+model Track {
+  id              String             @id @default(cuid())
+  title           String
+  slug            String
+  description     String?
+  durationSeconds Int
+  visibility      TrackVisibility    @default(PUBLIC)
+  audioObjectKey  String
+  coverObjectKey  String?
+  waveformUrl     String?
+  ownerId         String
+  owner           User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  albumId         String?
+  album           Album?             @relation(fields: [albumId], references: [id])
+  playlistTracks  PlaylistTrack[]
+  likes           TrackLike[]
+  comments        Comment[]
+  history         ListeningHistory[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([ownerId, slug])
+  @@index([title])
+  @@index([createdAt])
+}
+
+model Album {
+  id          String   @id @default(cuid())
+  title       String
+  coverUrl    String?
+  releaseDate DateTime?
+  ownerId     String
+  tracks      Track[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Playlist {
+  id          String          @id @default(cuid())
+  title       String
+  description String?
+  coverUrl    String?
+  isPublic    Boolean         @default(true)
+  ownerId     String
+  owner       User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  tracks      PlaylistTrack[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model PlaylistTrack {
+  playlistId String
+  trackId    String
+  position   Int
+  addedAt    DateTime @default(now())
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  track      Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@id([playlistId, trackId])
+  @@index([position])
+}
+
+model TrackLike {
+  userId    String
+  trackId   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@id([userId, trackId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  body      String
+  userId    String
+  trackId   String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Follow {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+  follower    User     @relation("following", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+}
+
+model ListeningHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  trackId   String
+  playedAt  DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([userId, playedAt])
+}
