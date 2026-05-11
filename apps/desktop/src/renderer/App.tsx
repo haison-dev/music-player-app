@@ -1,18 +1,34 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import type { TrackSummary } from '@music/shared';
 import { AuthModal } from './components/AuthModal';
 import { Hero } from './components/Hero';
+import { HomeFeed } from './components/HomeFeed';
 import { PlayerBar } from './components/PlayerBar';
 import { PlaylistModal } from './components/PlaylistModal';
 import { QueuePanel } from './components/QueuePanel';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar, type LibrarySortBy, type LibraryViewMode } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { TrackTable } from './components/TrackTable';
+import { UserProfile } from './components/UserProfile';
 import { fallbackTracks } from './data/fallbackTracks';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { useTrackViews } from './hooks/useTrackViews';
-import { getFeaturedTracks, getHealth } from './services/api';
+import {
+  addTrackToPlaylistApi,
+  createPlaylistApi,
+  getFeaturedTracks,
+  getLibraryState,
+  loginAccount,
+  registerAccount,
+  removeTrackFromPlaylistApi,
+  setSelectedFolderApi,
+  toggleFollowArtistApi,
+  toggleLikeTrack,
+  trackUiAction,
+  uploadTrackApi,
+  type LibraryStateDto,
+} from './services/api';
 import { useAuthStore } from './stores/authStore';
 import { useLibraryStore } from './stores/libraryStore';
 import type { AuthMode, View } from './types';
@@ -29,31 +45,26 @@ function App() {
   const [pendingTrack, setPendingTrack] = useState<TrackSummary | null>(null);
   const [playlistName, setPlaylistName] = useState('');
   const [authError, setAuthError] = useState('');
-  const [notice, setNotice] = useState('Ready');
+  const [notice, setNotice] = useState('Sẵn sàng');
   const [isNowPlayingOpen, setNowPlayingOpen] = useState(true);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isProfileMenuOpen, setProfileMenuOpen] = useState(false);
   const [isLibrarySortOpen, setLibrarySortOpen] = useState(false);
+  const [librarySortBy, setLibrarySortBy] = useState<LibrarySortBy>('recent');
+  const [libraryViewMode, setLibraryViewMode] = useState<LibraryViewMode>('compact');
   const [isPlaylistMoreOpen, setPlaylistMoreOpen] = useState(false);
   const [isPlaylistViewOpen, setPlaylistViewOpen] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(300);
+  const [sidebarWidth, setSidebarWidth] = useState(400);
   const [isResizingSidebar, setResizingSidebar] = useState(false);
 
-  const { user, login, register, logout } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const {
     likedTrackIds,
     playlists,
     uploadedTracks,
     selectedFolder,
-    toggleLike,
-    createPlaylist,
-    addTrackToPlaylist,
-    removeTrackFromPlaylist,
-    setSelectedFolder,
-    addUploadedTrack,
+    followedArtistIds,
   } = useLibraryStore();
-
-  const health = useQuery({ queryKey: ['health'], queryFn: getHealth, retry: 1 });
   const tracksQuery = useQuery<TrackSummary[]>({
     queryKey: ['featured-tracks'],
     queryFn: getFeaturedTracks,
@@ -72,6 +83,41 @@ function App() {
   });
   const player = useAudioPlayer(allTracks);
   const activeTrack = player.activeTrack ?? allTracks[0];
+  const sortedPlaylists = useMemo(() => {
+    const next = [...playlists];
+
+    if (librarySortBy === 'alphabetical' || librarySortBy === 'creator') {
+      return next.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    if (librarySortBy === 'recent' || librarySortBy === 'recent_added') {
+      return next.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
+    return next;
+  }, [librarySortBy, playlists]);
+
+  function syncLibraryState(next: LibraryStateDto) {
+    useLibraryStore.setState({
+      likedTrackIds: next.likedTrackIds,
+      playlists: next.playlists,
+      uploadedTracks: next.uploadedTracks,
+      selectedFolder: next.selectedFolder,
+      followedArtistIds: next.followedArtistIds,
+    });
+  }
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    void getLibraryState(user.id)
+      .then(syncLibraryState)
+      .catch(() => {
+        setNotice('Không thể tải thư viện cloud. Đang dùng dữ liệu cục bộ.');
+      });
+  }, [user]);
 
   useEffect(() => {
     if (!isResizingSidebar) {
@@ -80,7 +126,7 @@ function App() {
 
     function resize(event: globalThis.PointerEvent) {
       const appLeft = appRef.current?.getBoundingClientRect().left ?? 0;
-      const nextWidth = Math.min(520, Math.max(260, event.clientX - appLeft));
+      const nextWidth = Math.min(520, Math.max(340, event.clientX - appLeft));
       setSidebarWidth(nextWidth);
     }
 
@@ -105,7 +151,7 @@ function App() {
     if (!user) {
       setAuthMode('login');
       setAuthOpen(true);
-      setNotice('Sign in to use library features.');
+      setNotice('Vui lòng đăng nhập để dùng tính năng thư viện.');
       return;
     }
 
@@ -121,17 +167,59 @@ function App() {
     }
   }
 
-  async function importLocalMusic() {
-    const folder = await window.musicPlatform.library.selectFolder();
+  function goHome() {
+    setQuery('');
+    setProfileMenuOpen(false);
+    setLibrarySortOpen(false);
+    setPlaylistMoreOpen(false);
+    setPlaylistViewOpen(false);
+    selectView('Home');
+    document.querySelector<HTMLElement>('.content')?.scrollTo({ top: 0, behavior: 'smooth' });
+    void trackUiAction('go-home', user?.id);
+    setNotice('Đã về trang chủ.');
+  }
 
-    if (!folder) {
+  function openArtistFromHome(artistName: string) {
+    setQuery(artistName);
+    selectView('Search');
+    setNotice(`Đang mở nghệ sĩ: ${artistName}`);
+  }
+
+  async function importLocalMusic() {
+    const filePaths = await window.musicPlatform.library.selectAudioFiles();
+
+    if (!filePaths.length) {
       return;
     }
 
-    setSelectedFolder(folder);
-    fallbackTracks.forEach(addUploadedTrack);
+    if (!user) {
+      setAuthMode('login');
+      setAuthOpen(true);
+      return;
+    }
+
+    const selectedFolder = filePaths[0]?.replace(/\\/g, '/').split('/').slice(0, -1).join('/') ?? null;
+    const nextFolderState = await setSelectedFolderApi(user.id, selectedFolder);
+    syncLibraryState(nextFolderState);
+    for (const filePath of filePaths) {
+      const normalizedPath = filePath.replace(/\\/g, '/');
+      const fileName = normalizedPath.split('/').pop() ?? 'Unknown track';
+      const stem = fileName.replace(/\.[^/.]+$/, '');
+      const [artistName, title] = stem.includes(' - ')
+        ? stem.split(/\s-\s(.+)/, 2)
+        : ['Local Artist', stem];
+      const nextUploadState = await uploadTrackApi(user.id, {
+        id: `upload-${normalizedPath.toLowerCase()}`,
+        title: title || stem,
+        artistName: artistName || 'Local Artist',
+        coverUrl: '/assets/covers/poster.png',
+        audioUrl: `file:///${normalizedPath}`,
+        durationSeconds: 180,
+      });
+      syncLibraryState(nextUploadState);
+    }
     selectView('Uploads');
-    setNotice('Folder selected. Demo tracks were added to Uploads until scanner is implemented.');
+    setNotice('Đã chọn thư mục và đồng bộ bài hát.');
   }
 
   function openAddToPlaylist(track: TrackSummary) {
@@ -147,33 +235,24 @@ function App() {
     setPendingTrack(null);
   }
 
-  function submitPlaylist(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    requireUser(() => {
-      const playlist = createPlaylist(playlistName);
-
-      if (pendingTrack) {
-        addTrackToPlaylist(playlist.id, pendingTrack.id);
-      }
-
-      setPlaylistName('');
-      closePlaylistModal();
-      selectView('Playlist', playlist.id);
-      setNotice(`Playlist "${playlist.name}" created.`);
-    });
-  }
-
   function addPendingTrackToPlaylist(playlistId: string) {
     if (!pendingTrack) {
       return;
     }
 
-    addTrackToPlaylist(playlistId, pendingTrack.id);
-    closePlaylistModal();
-    setNotice('Track added to playlist.');
+    if (!user?.id) {
+      setAuthOpen(true);
+      return;
+    }
+
+    void addTrackToPlaylistApi(user.id, playlistId, pendingTrack.id).then((state) => {
+      syncLibraryState(state);
+      closePlaylistModal();
+      setNotice('Track added to playlist.');
+    });
   }
 
-  function submitAuth(event: FormEvent<HTMLFormElement>) {
+  async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const email = String(form.get('email') ?? '');
@@ -182,14 +261,33 @@ function App() {
 
     try {
       if (authMode === 'register') {
-        register(displayName, email, password);
+        const result = await registerAccount({
+          email,
+          password,
+          username: email.split('@')[0] || 'listener',
+          displayName,
+        });
+        useAuthStore.setState({
+          user: {
+            id: result.user.id,
+            displayName: result.user.displayName,
+            email: result.user.email,
+          },
+        });
       } else {
-        login(email, password);
+        const result = await loginAccount({ email, password });
+        useAuthStore.setState({
+          user: {
+            id: result.user.id,
+            displayName: result.user.displayName,
+            email: result.user.email,
+          },
+        });
       }
 
       setAuthError('');
       setAuthOpen(false);
-      setNotice(authMode === 'register' ? 'Account created.' : 'Signed in.');
+      setNotice(authMode === 'register' ? 'Tạo tài khoản thành công.' : 'Đăng nhập thành công.');
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : 'Authentication failed.');
     }
@@ -205,6 +303,54 @@ function App() {
     setResizingSidebar(true);
   }
 
+  async function handleCreatePlaylist() {
+    if (!user) {
+      setAuthMode('login');
+      setAuthOpen(true);
+      return;
+    }
+    setPlaylistOpen(true);
+  }
+
+  async function handleSubmitPlaylist(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user?.id) {
+      setAuthMode('login');
+      setAuthOpen(true);
+      return;
+    }
+    try {
+      const result = await createPlaylistApi(user.id, playlistName);
+      syncLibraryState(result.state);
+      setPlaylistName('');
+      closePlaylistModal();
+      selectView('Playlist', result.playlist.id);
+      setNotice(`Playlist "${result.playlist.name}" created.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Không thể tạo playlist.');
+    }
+  }
+
+  async function handleToggleLike(trackId: string) {
+    if (!user?.id) {
+      setAuthMode('login');
+      setAuthOpen(true);
+      return;
+    }
+    const state = await toggleLikeTrack(user.id, trackId);
+    syncLibraryState(state);
+  }
+
+  async function handleRemoveFromPlaylist(playlistId: string, trackId: string) {
+    if (!user?.id) {
+      setAuthMode('login');
+      setAuthOpen(true);
+      return;
+    }
+    const state = await removeTrackFromPlaylistApi(user.id, playlistId, trackId);
+    syncLibraryState(state);
+  }
+
   return (
     <div
       ref={appRef}
@@ -212,6 +358,7 @@ function App() {
         'app-shell',
         isNowPlayingOpen ? '' : 'now-playing-hidden',
         isSidebarCollapsed ? 'sidebar-collapsed' : '',
+        `library-mode-${libraryViewMode}`,
         isResizingSidebar ? 'resizing-sidebar' : '',
       ].join(' ')}
       style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
@@ -223,8 +370,7 @@ function App() {
         onTimeUpdate={(event) => player.setCurrentTime(event.currentTarget.currentTime)}
       />
 
-      <Topbar
-        apiOnline={health.isSuccess}
+        <Topbar
         isProfileMenuOpen={isProfileMenuOpen}
         query={query}
         user={user}
@@ -235,30 +381,89 @@ function App() {
         onLogout={() => {
           logout();
           setProfileMenuOpen(false);
-          setNotice('Signed out.');
+          setNotice('Đã đăng xuất.');
         }}
-        onNotify={() => setNotice('No new notifications.')}
+        onNotify={() => setNotice('Không có thông báo mới.')}
         onProfileMenuToggle={() => setProfileMenuOpen((current) => !current)}
-        onSelectHome={() => selectView('Home')}
-        onSearch={(nextQuery) => {
-          setQuery(nextQuery);
-          setActiveView('Search');
-          setProfileMenuOpen(false);
-        }}
-      />
+        onSelectHome={goHome}
+          onSearch={(nextQuery) => {
+            setQuery(nextQuery);
+            setActiveView('Search');
+            setProfileMenuOpen(false);
+          }}
+          onOpenPremium={() => {
+            void trackUiAction('open-premium', user?.id);
+            setNotice('Trang Premium sẽ sớm ra mắt.');
+          }}
+          onInstallApp={() => {
+            void trackUiAction('install-app', user?.id);
+            setNotice('Ứng dụng desktop đã được cài sẵn.');
+          }}
+          onOpenFriends={() => {
+            void trackUiAction('open-friends', user?.id);
+            setNotice('Hoạt động bạn bè sẽ sớm khả dụng.');
+          }}
+          onProfileAction={(action) => {
+            if (action === 'Hồ sơ') {
+              setProfileMenuOpen(false);
+              selectView('Profile');
+            }
+            void trackUiAction(`profile-${action}`, user?.id);
+            setNotice(`Đã ghi nhận thao tác "${action}".`);
+          }}
+        />
 
         <Sidebar
           activeView={activeView}
           isCollapsed={isSidebarCollapsed}
           isSortOpen={isLibrarySortOpen}
+          sortBy={librarySortBy}
+          viewMode={libraryViewMode}
           likedCount={likedTrackIds.length}
-          playlists={playlists}
+          playlists={sortedPlaylists}
           uploadCount={uploadedTracks.length}
-          onCreatePlaylist={() => requireUser(() => setPlaylistOpen(true))}
+          onCreatePlaylist={() => {
+            void handleCreatePlaylist();
+          }}
           onImportLocalMusic={importLocalMusic}
           onSelectView={selectView}
           onToggleSort={() => setLibrarySortOpen((current) => !current)}
           onToggleCollapse={() => setSidebarCollapsed((current) => !current)}
+          onSelectSort={(sortBy) => {
+            setLibrarySortBy(sortBy);
+            setLibrarySortOpen(false);
+            void trackUiAction(`sidebar-sort-${sortBy}`, user?.id);
+            setNotice(`Đã sắp xếp theo ${sortBy.replace('_', ' ')}.`);
+          }}
+          onSelectViewMode={(mode) => {
+            setLibraryViewMode(mode);
+            setLibrarySortOpen(false);
+            void trackUiAction(`sidebar-view-${mode}`, user?.id);
+            setNotice(`Chế độ hiển thị: ${mode.replace('_', ' ')}.`);
+          }}
+          onClearFilters={() => {
+            setLibrarySortBy('recent');
+            setLibrarySortOpen(false);
+            void trackUiAction('sidebar-clear-filters', user?.id);
+            setNotice('Đã xóa bộ lọc thư viện.');
+          }}
+          onSearchLibrary={() => {
+            selectView('Search');
+            void trackUiAction('sidebar-search-library', user?.id);
+            setNotice('Đã chuyển sang tìm kiếm thư viện.');
+          }}
+          onExpandLibrary={() => {
+            void trackUiAction('sidebar-expand-library', user?.id);
+            setNotice('Đã thực hiện mở rộng thư viện.');
+          }}
+          onFilterPlaylists={() => {
+            void trackUiAction('sidebar-filter-playlists', user?.id);
+            setNotice('Đang hiển thị playlist.');
+          }}
+          onFilterArtists={() => {
+            void trackUiAction('sidebar-filter-artists', user?.id);
+            setNotice('Bộ lọc nghệ sĩ sẽ sớm khả dụng.');
+          }}
         />
 
       {!isSidebarCollapsed && (
@@ -272,40 +477,86 @@ function App() {
       )}
 
       <main className="content">
-        <Hero
-          activePlaylist={activePlaylist}
-          activeView={activeView}
-          notice={notice}
-          selectedFolder={selectedFolder}
-          tracks={visibleTracks.length ? visibleTracks : allTracks}
-          user={user}
-        />
-        <TrackTable
-          activePlaylist={activePlaylist}
-          activeTrackId={activeTrack.id}
-          activeView={activeView}
-          isMoreMenuOpen={isPlaylistMoreOpen}
-          isViewMenuOpen={isPlaylistViewOpen}
-          likedTrackIds={likedTrackIds}
-          tracks={visibleTracks}
-          onAddToPlaylist={openAddToPlaylist}
-          onPlayTrack={player.playTrack}
-          onRefresh={() => tracksQuery.refetch()}
-          onRemoveFromPlaylist={removeTrackFromPlaylist}
-          onShuffle={() => {
-            player.toggleShuffleMode();
-            setNotice(player.isShuffleOn ? 'Shuffle off.' : 'Shuffle on.');
-          }}
-          onToggleLike={toggleLike}
-          onToggleMoreMenu={() => {
-            setPlaylistMoreOpen((current) => !current);
-            setPlaylistViewOpen(false);
-          }}
-          onToggleViewMenu={() => {
-            setPlaylistViewOpen((current) => !current);
-            setPlaylistMoreOpen(false);
-          }}
-        />
+        {activeView === 'Home' ? (
+          <HomeFeed
+            tracks={allTracks}
+            onPlayTrack={player.playTrack}
+            onOpenArtist={openArtistFromHome}
+            onOpenLibraryView={() => selectView('Your Library')}
+          />
+        ) : activeView === 'Profile' ? (
+          <UserProfile
+            user={user}
+            tracks={allTracks}
+            playlists={playlists}
+            likedTrackIds={likedTrackIds}
+            followedArtistIds={followedArtistIds}
+            onPlayTrack={player.playTrack}
+            onOpenPlaylist={(playlistId) => selectView('Playlist', playlistId)}
+          />
+        ) : (
+          <>
+            <Hero
+              activePlaylist={activePlaylist}
+              activeView={activeView}
+              notice={notice}
+              selectedFolder={selectedFolder}
+              tracks={visibleTracks}
+              user={user}
+            />
+            <TrackTable
+              activePlaylist={activePlaylist}
+              activeTrackId={activeTrack.id}
+              activeView={activeView}
+              isMoreMenuOpen={isPlaylistMoreOpen}
+              isViewMenuOpen={isPlaylistViewOpen}
+              likedTrackIds={likedTrackIds}
+              tracks={visibleTracks}
+              onAddToPlaylist={openAddToPlaylist}
+              onPlayTrack={player.playTrack}
+              onRefresh={() => tracksQuery.refetch()}
+              onRemoveFromPlaylist={handleRemoveFromPlaylist}
+              onShuffle={() => {
+                player.toggleShuffleMode();
+                setNotice(player.isShuffleOn ? 'Đã tắt trộn bài.' : 'Đã bật trộn bài.');
+              }}
+              onToggleLike={(trackId) => {
+                void handleToggleLike(trackId);
+              }}
+              onToggleMoreMenu={() => {
+                setPlaylistMoreOpen((current) => !current);
+                setPlaylistViewOpen(false);
+              }}
+              onToggleViewMenu={() => {
+                setPlaylistViewOpen((current) => !current);
+                setPlaylistMoreOpen(false);
+              }}
+              onDownloadPlaylist={() => {
+                void trackUiAction('download-playlist', user?.id, activeView);
+                setNotice('Đang chuẩn bị tải playlist.');
+              }}
+              onFollowArtist={() => {
+                if (!user?.id) {
+                  setAuthOpen(true);
+                  return;
+                }
+                const artistId = activeTrack.artistName.toLowerCase().replace(/\s+/g, '-');
+                void toggleFollowArtistApi(user.id, artistId).then((payload) => {
+                  syncLibraryState(payload.state);
+                  setNotice(payload.followed ? 'Đã theo dõi nghệ sĩ.' : 'Đã bỏ theo dõi nghệ sĩ.');
+                });
+              }}
+              onMoreAction={(action) => {
+                void trackUiAction(`playlist-${action}`, user?.id, activeView);
+                setNotice(`Thao tác playlist: ${action}`);
+              }}
+              onChangeListView={(mode) => {
+                void trackUiAction(`change-view-${mode}`, user?.id, activeView);
+                setNotice(`Đã chuyển chế độ xem sang ${mode}.`);
+              }}
+            />
+          </>
+        )}
       </main>
 
       {isNowPlayingOpen && (
@@ -333,9 +584,11 @@ function App() {
         onSetVolume={player.setVolume}
         onShuffle={() => {
           player.toggleShuffleMode();
-          setNotice(player.isShuffleOn ? 'Shuffle off.' : 'Shuffle on.');
+          setNotice(player.isShuffleOn ? 'Đã tắt trộn bài.' : 'Đã bật trộn bài.');
         }}
-        onToggleLike={() => toggleLike(activeTrack.id)}
+        onToggleLike={() => {
+          void handleToggleLike(activeTrack.id);
+        }}
         onTogglePlay={player.togglePlay}
       />
 
@@ -366,7 +619,7 @@ function App() {
           onAddToPlaylist={addPendingTrackToPlaylist}
           onClose={closePlaylistModal}
           onPlaylistNameChange={setPlaylistName}
-          onSubmit={submitPlaylist}
+          onSubmit={handleSubmitPlaylist}
         />
       )}
     </div>

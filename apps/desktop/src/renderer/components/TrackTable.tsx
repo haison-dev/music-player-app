@@ -1,6 +1,7 @@
 import {
   Ban,
   Check,
+  ChevronRight,
   Clock3,
   Download,
   Edit3,
@@ -19,6 +20,7 @@ import {
   UserPlus,
   X,
 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TrackSummary } from '@music/shared';
 import type { Playlist } from '../stores/libraryStore';
 import type { View } from '../types';
@@ -40,19 +42,23 @@ type TrackTableProps = {
   onToggleLike: (trackId: string) => void;
   onToggleMoreMenu: () => void;
   onToggleViewMenu: () => void;
+  onDownloadPlaylist: () => void;
+  onFollowArtist: () => void;
+  onMoreAction: (action: string) => void;
+  onChangeListView: (mode: 'compact' | 'list') => void;
 };
 
 const moreItems = [
-  ['Thêm vào danh sách chờ', ListMusic],
-  ['Xóa khỏi hồ sơ', UserMinus],
-  ['Sửa thông tin chi tiết', Edit3],
-  ['Xóa', MinusCircle],
-  ['Đặt thành riêng tư', Lock],
-  ['Mời cộng sự', UserPlus],
-  ['Loại bỏ khỏi hồ sơ sở thích của bạn', Ban],
-  ['Di chuyển sang thư mục', Folder],
-  ['Chia sẻ', Share2],
-  ['Mở trong ứng dụng dành cho máy tính', ExternalLink],
+  { label: 'Thêm vào danh sách chờ', icon: ListMusic },
+  { label: 'Xóa khỏi hồ sơ', icon: UserMinus, dividerBefore: true },
+  { label: 'Sửa thông tin chi tiết', icon: Edit3 },
+  { label: 'Xóa', icon: MinusCircle },
+  { label: 'Đặt thành riêng tư', icon: Lock, dividerBefore: true },
+  { label: 'Mời cộng sự', icon: UserPlus },
+  { label: 'Loại bỏ khỏi hồ sơ sở thích của bạn', icon: Ban },
+  { label: 'Di chuyển sang thư mục', icon: Folder, dividerBefore: true, hasSubmenu: true },
+  { label: 'Chia sẻ', icon: Share2, hasSubmenu: true },
+  { label: 'Mở trong ứng dụng dành cho máy tính', icon: ExternalLink, dividerBefore: true },
 ] as const;
 
 export function TrackTable({
@@ -71,7 +77,79 @@ export function TrackTable({
   onToggleLike,
   onToggleMoreMenu,
   onToggleViewMenu,
+  onDownloadPlaylist,
+  onFollowArtist,
+  onMoreAction,
+  onChangeListView,
 }: TrackTableProps) {
+  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const [moreMenuPos, setMoreMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const moreMenuWidth = 336;
+
+  const moreMenuStyle = useMemo(
+    () => ({
+      top: `${moreMenuPos.top}px`,
+      left: `${moreMenuPos.left}px`,
+    }),
+    [moreMenuPos],
+  );
+
+  useEffect(() => {
+    if (!isMoreMenuOpen) {
+      return;
+    }
+
+    const updatePosition = () => {
+      const rect = moreButtonRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return;
+      }
+
+      const horizontalPadding = 8;
+      const maxLeft = window.innerWidth - moreMenuWidth - horizontalPadding;
+      const nextLeft = Math.max(horizontalPadding, Math.min(rect.left, maxLeft));
+      const nextTop = Math.max(8, rect.top - 18);
+
+      setMoreMenuPos({ top: nextTop, left: nextLeft });
+    };
+
+    updatePosition();
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isMoreMenuOpen]);
+
+  useEffect(() => {
+    if (!isMoreMenuOpen) {
+      return;
+    }
+
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (moreMenuRef.current?.contains(target) || moreButtonRef.current?.contains(target)) {
+        return;
+      }
+      onToggleMoreMenu();
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onToggleMoreMenu();
+      }
+    };
+
+    window.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isMoreMenuOpen, onToggleMoreMenu]);
+
   return (
     <section className="table-section">
       <div className="playlist-actions">
@@ -81,23 +159,28 @@ export function TrackTable({
         <button className="ghost-action" onClick={onShuffle} title="Trộn bài hát">
           <Shuffle size={30} />
         </button>
-        <button className="ghost-action" title="Download">
+        <button className="ghost-action" title="Download" onClick={onDownloadPlaylist}>
           <Download size={30} />
         </button>
-        <button className="ghost-action" title="Follow">
+        <button className="ghost-action" title="Follow" onClick={onFollowArtist}>
           <UserPlus size={30} />
         </button>
 
         <div className="playlist-menu-wrap">
-          <button className="ghost-action" title="More" onClick={onToggleMoreMenu}>
+          <button className="ghost-action" title="More" onClick={onToggleMoreMenu} ref={moreButtonRef}>
             <MoreHorizontal size={30} />
           </button>
           {isMoreMenuOpen && (
-            <div className="playlist-more-menu">
-              {moreItems.map(([label, Icon], index) => (
-                <button className={index === 1 || index === 4 || index === 7 ? 'with-divider' : ''} key={label}>
-                  <Icon size={20} />
+            <div className="playlist-more-menu fixed-layer" style={moreMenuStyle} ref={moreMenuRef}>
+              {moreItems.map(({ label, icon: Icon, dividerBefore, hasSubmenu }) => (
+                <button
+                  className={`${dividerBefore ? 'with-divider' : ''} ${hasSubmenu ? 'has-submenu' : ''}`.trim()}
+                  key={label}
+                  onClick={() => onMoreAction(label)}
+                >
+                  <Icon size={18} />
                   <span>{label}</span>
+                  {hasSubmenu && <ChevronRight size={16} />}
                 </button>
               ))}
             </div>
@@ -112,12 +195,12 @@ export function TrackTable({
           {isViewMenuOpen && (
             <div className="playlist-view-menu">
               <strong>Xem dưới dạng</strong>
-              <button className="selected">
+              <button className="selected" onClick={() => onChangeListView('compact')}>
                 <ListMusic size={20} />
                 Rút gọn
                 <Check size={18} />
               </button>
-              <button>
+              <button onClick={() => onChangeListView('list')}>
                 <List size={20} />
                 Danh sách
               </button>
