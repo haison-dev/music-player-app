@@ -44,6 +44,17 @@ app.whenReady().then(() => {
 
     return result.canceled ? null : result.filePaths[0];
   });
+  ipcMain.handle('library:select-audio-files', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections'],
+      title: 'Select audio files',
+      filters: [
+        { name: 'Audio', extensions: ['mp3', 'm4a', 'aac', 'wav', 'flac', 'ogg'] },
+      ],
+    });
+
+    return result.canceled ? [] : result.filePaths;
+  });
 
   createWindow();
 

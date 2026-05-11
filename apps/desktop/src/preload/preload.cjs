@@ -6,5 +6,6 @@ contextBridge.exposeInMainWorld('musicPlatform', {
   },
   library: {
     selectFolder: () => ipcRenderer.invoke('library:select-folder'),
+    selectAudioFiles: () => ipcRenderer.invoke('library:select-audio-files'),
   },
 });
