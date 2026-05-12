@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Folder,
   Heart,
+  Import,
   List,
   ListMusic,
   Lock,
@@ -24,6 +25,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TrackSummary } from '@music/shared';
 import type { Playlist } from '../stores/libraryStore';
 import type { View } from '../types';
+import { resolveAssetUrl } from '../utils/assets';
 import { formatDuration } from '../utils/formatDuration';
 
 type TrackTableProps = {
@@ -43,6 +45,7 @@ type TrackTableProps = {
   onToggleMoreMenu: () => void;
   onToggleViewMenu: () => void;
   onDownloadPlaylist: () => void;
+  onImportLocalMusic: () => void;
   onFollowArtist: () => void;
   onMoreAction: (action: string) => void;
   onChangeListView: (mode: 'compact' | 'list') => void;
@@ -78,6 +81,7 @@ export function TrackTable({
   onToggleMoreMenu,
   onToggleViewMenu,
   onDownloadPlaylist,
+  onImportLocalMusic,
   onFollowArtist,
   onMoreAction,
   onChangeListView,
@@ -162,6 +166,11 @@ export function TrackTable({
         <button className="ghost-action" title="Download" onClick={onDownloadPlaylist}>
           <Download size={30} />
         </button>
+        {activeView === 'Uploads' && (
+          <button className="ghost-action" title="Upload local music" onClick={onImportLocalMusic}>
+            <Import size={30} />
+          </button>
+        )}
         <button className="ghost-action" title="Follow" onClick={onFollowArtist}>
           <UserPlus size={30} />
         </button>
@@ -222,7 +231,7 @@ export function TrackTable({
         {tracks.map((track, index) => (
           <div className={`song-row ${activeTrackId === track.id ? 'playing' : ''}`} key={track.id}>
             <button onClick={() => onPlayTrack(track)}>{index + 1}</button>
-            <img src={track.coverUrl || '/assets/covers/poster.png'} alt="" />
+            <img src={resolveAssetUrl(track.coverUrl)} alt="" />
             <button className="song-main" onClick={() => onPlayTrack(track)}>
               <strong>{track.title}</strong>
               <small>{track.artistName}</small>

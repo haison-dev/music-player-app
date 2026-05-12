@@ -26,12 +26,13 @@ import {
   toggleFollowArtistApi,
   toggleLikeTrack,
   trackUiAction,
-  uploadTrackApi,
+  uploadAudioFileApi,
   type LibraryStateDto,
 } from './services/api';
 import { useAuthStore } from './stores/authStore';
 import { useLibraryStore } from './stores/libraryStore';
 import type { AuthMode, View } from './types';
+import { DEFAULT_COVER_URL } from './utils/assets';
 
 function App() {
   const appRef = useRef<HTMLDivElement>(null);
@@ -186,9 +187,9 @@ function App() {
   }
 
   async function importLocalMusic() {
-    const filePaths = await window.musicPlatform.library.selectAudioFiles();
+    const audioFiles = await window.musicPlatform.library.selectAudioFiles();
 
-    if (!filePaths.length) {
+    if (!audioFiles.length) {
       return;
     }
 
@@ -198,23 +199,27 @@ function App() {
       return;
     }
 
-    const selectedFolder = filePaths[0]?.replace(/\\/g, '/').split('/').slice(0, -1).join('/') ?? null;
+    const selectedFolder = audioFiles[0]?.filePath.replace(/\\/g, '/').split('/').slice(0, -1).join('/') ?? null;
     const nextFolderState = await setSelectedFolderApi(user.id, selectedFolder);
     syncLibraryState(nextFolderState);
-    for (const filePath of filePaths) {
+    for (const audioFile of audioFiles) {
+      const filePath = audioFile.filePath;
       const normalizedPath = filePath.replace(/\\/g, '/');
       const fileName = normalizedPath.split('/').pop() ?? 'Unknown track';
       const stem = fileName.replace(/\.[^/.]+$/, '');
       const [artistName, title] = stem.includes(' - ')
         ? stem.split(/\s-\s(.+)/, 2)
         : ['Local Artist', stem];
-      const nextUploadState = await uploadTrackApi(user.id, {
-        id: `upload-${normalizedPath.toLowerCase()}`,
-        title: title || stem,
-        artistName: artistName || 'Local Artist',
-        coverUrl: '/assets/covers/poster.png',
-        audioUrl: `file:///${normalizedPath}`,
-        durationSeconds: 180,
+      const audioBuffer = await window.musicPlatform.library.readAudioFile(filePath);
+      const nextUploadState = await uploadAudioFileApi({
+        audio: new Blob([audioBuffer]),
+        coverUrl: audioFile.coverUrl || DEFAULT_COVER_URL,
+        durationSeconds: audioFile.durationSeconds || 180,
+        fileName,
+        selectedFolder,
+        title: audioFile.title || title || stem,
+        artistName: audioFile.artistName || artistName || 'Local Artist',
+        userId: user.id,
       });
       syncLibraryState(nextUploadState);
     }
@@ -535,6 +540,7 @@ function App() {
                 void trackUiAction('download-playlist', user?.id, activeView);
                 setNotice('Đang chuẩn bị tải playlist.');
               }}
+              onImportLocalMusic={importLocalMusic}
               onFollowArtist={() => {
                 if (!user?.id) {
                   setAuthOpen(true);

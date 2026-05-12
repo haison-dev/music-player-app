@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react';
 import type { TrackSummary } from '@music/shared';
+import { resolveAssetUrl } from '../utils/assets';
 
 type TrackGridProps = {
   activeTrackId: string;
@@ -21,7 +22,7 @@ export function TrackGrid({ activeTrackId, title, tracks, onAddToPlaylist, onPla
         {tracks.map((track) => (
           <article className={`track-card ${activeTrackId === track.id ? 'playing' : ''}`} key={track.id}>
             <button className="track-cover" onClick={() => onPlayTrack(track)}>
-              <img src={track.coverUrl || '/assets/covers/poster.png'} alt="" />
+              <img src={resolveAssetUrl(track.coverUrl)} alt="" />
             </button>
             <strong>{track.title}</strong>
             <span>{track.artistName}</span>

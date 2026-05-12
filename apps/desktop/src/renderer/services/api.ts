@@ -183,6 +183,39 @@ export async function uploadTrackApi(userId: string, track: TrackSummary) {
   return parseResponse<LibraryStateDto>(response, 'Could not upload local track.');
 }
 
+export async function uploadAudioFileApi(input: {
+  artistName: string;
+  audio: Blob;
+  coverUrl: string | null;
+  durationSeconds: number;
+  fileName: string;
+  selectedFolder: string | null;
+  title: string;
+  userId: string;
+}) {
+  const body = new FormData();
+  body.set('userId', input.userId);
+  body.set('title', input.title);
+  body.set('artistName', input.artistName);
+  body.set('durationSeconds', String(input.durationSeconds));
+
+  if (input.coverUrl) {
+    body.set('coverUrl', input.coverUrl);
+  }
+
+  if (input.selectedFolder) {
+    body.set('selectedFolder', input.selectedFolder);
+  }
+
+  body.set('audio', input.audio, input.fileName);
+
+  const response = await fetch(`${API_URL}/api/library/uploads/audio`, {
+    method: 'POST',
+    body,
+  });
+  return parseResponse<LibraryStateDto>(response, 'Could not upload audio file.');
+}
+
 export async function toggleFollowArtistApi(userId: string, artistId: string) {
   const response = await fetch(`${API_URL}/api/library/follows/toggle`, {
     method: 'POST',

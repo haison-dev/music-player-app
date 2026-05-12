@@ -1,4 +1,5 @@
 import type { TrackSummary } from '@music/shared';
+import { resolveAssetUrl } from '../utils/assets';
 
 type HomeFeedProps = {
   tracks: TrackSummary[];
@@ -33,7 +34,7 @@ export function HomeFeed({ tracks, onPlayTrack, onOpenArtist, onOpenLibraryView 
           {artistCards.map((track) => (
             <article className="track-card artist-card" key={`artist-${track.artistName}`}>
               <button className="track-cover" onClick={() => onOpenArtist(track.artistName)}>
-                <img src={track.coverUrl || '/assets/covers/poster.png'} alt={track.artistName} />
+                <img src={resolveAssetUrl(track.coverUrl)} alt={track.artistName} />
               </button>
               <strong>{track.artistName}</strong>
               <span>Nghệ sĩ</span>
@@ -51,7 +52,7 @@ export function HomeFeed({ tracks, onPlayTrack, onOpenArtist, onOpenLibraryView 
           {albumCards.map((track) => (
             <article className="track-card" key={`album-${track.id}`}>
               <button className="track-cover" onClick={() => onPlayTrack(track)}>
-                <img src={track.coverUrl || '/assets/covers/poster.png'} alt={track.title} />
+                <img src={resolveAssetUrl(track.coverUrl)} alt={track.title} />
               </button>
               <strong>{track.title}</strong>
               <span>{track.artistName}</span>
@@ -69,7 +70,7 @@ export function HomeFeed({ tracks, onPlayTrack, onOpenArtist, onOpenLibraryView 
           {recentCards.map((track) => (
             <article className="track-card" key={`recent-${track.id}`}>
               <button className="track-cover" onClick={() => onPlayTrack(track)}>
-                <img src={track.coverUrl || '/assets/covers/poster.png'} alt={track.title} />
+                <img src={resolveAssetUrl(track.coverUrl)} alt={track.title} />
               </button>
               <strong>{track.title}</strong>
               <span>{track.artistName}</span>

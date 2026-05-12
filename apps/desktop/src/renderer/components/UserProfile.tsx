@@ -2,6 +2,7 @@ import { UserRound } from 'lucide-react';
 import type { TrackSummary } from '@music/shared';
 import type { AuthUser } from '../stores/authStore';
 import type { Playlist } from '../stores/libraryStore';
+import { DEFAULT_COVER_URL, resolveAssetUrl } from '../utils/assets';
 import { formatDuration } from '../utils/formatDuration';
 
 type UserProfileProps = {
@@ -73,7 +74,7 @@ export function UserProfile({
           {topTracks.map((track, index) => (
             <button className="profile-track-row" key={track.id} onClick={() => onPlayTrack(track)}>
               <span>{index + 1}</span>
-              <img src={track.coverUrl || '/assets/covers/poster.png'} alt={track.title} />
+              <img src={resolveAssetUrl(track.coverUrl)} alt={track.title} />
               <div>
                 <strong>{track.title}</strong>
                 <small>{track.artistName}</small>
@@ -90,7 +91,7 @@ export function UserProfile({
         <div className="profile-card-grid">
           {publicPlaylists.map((playlist) => (
             <button className="profile-card" key={playlist.id} onClick={() => onOpenPlaylist(playlist.id)}>
-              <img src="/assets/covers/poster.png" alt={playlist.name} />
+              <img src={DEFAULT_COVER_URL} alt={playlist.name} />
               <strong>{playlist.name}</strong>
               <small>Của {displayName}</small>
             </button>
@@ -104,7 +105,7 @@ export function UserProfile({
         <div className="profile-card-grid">
           {followedArtists.map((artistTrack) => (
             <article className="profile-card artist" key={`followed-${artistTrack.artistName}`}>
-              <img src={artistTrack.coverUrl || '/assets/covers/poster.png'} alt={artistTrack.artistName} />
+              <img src={resolveAssetUrl(artistTrack.coverUrl)} alt={artistTrack.artistName} />
               <strong>{artistTrack.artistName}</strong>
               <small>Nghệ sĩ</small>
             </article>

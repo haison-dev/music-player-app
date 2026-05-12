@@ -1,6 +1,7 @@
 import { Heart, Pause, Play, Shuffle, SkipBack, SkipForward, Volume2 } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import type { TrackSummary } from '@music/shared';
+import { resolveAssetUrl } from '../utils/assets';
 import { formatDuration } from '../utils/formatDuration';
 
 type PlayerBarProps = {
@@ -41,7 +42,7 @@ export function PlayerBar({
   return (
     <footer className="player-bar">
       <div className="current-track">
-        <img src={activeTrack.coverUrl || '/assets/covers/poster.png'} alt="" />
+        <img src={resolveAssetUrl(activeTrack.coverUrl)} alt="" />
         <div>
           <strong>{activeTrack.title}</strong>
           <span>{activeTrack.artistName}</span>

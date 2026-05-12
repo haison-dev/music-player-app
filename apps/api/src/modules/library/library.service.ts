@@ -1,7 +1,15 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { TrackSummary } from '@music/shared';
 import type { Playlist, Track } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
+
+type UploadedAudioFile = {
+  buffer: Buffer;
+  mimetype: string;
+  originalname: string;
+  size: number;
+};
 
 type PlaylistDto = {
   id: string;
@@ -172,6 +180,57 @@ export class LibraryService {
     return this.getState(userId);
   }
 
+  async uploadAudioFile(
+    userId: string,
+    input: {
+      audio: UploadedAudioFile;
+      artistName: string;
+      coverUrl?: string;
+      durationSeconds: number;
+      selectedFolder?: string;
+      title: string;
+    },
+  ) {
+    await this.assertUser(userId);
+
+    if (!input.audio?.buffer?.length) {
+      throw new BadRequestException('audio file is required.');
+    }
+
+    const title = input.title.trim();
+    const artistName = input.artistName.trim();
+
+    if (!title || !artistName || !Number.isFinite(input.durationSeconds)) {
+      throw new BadRequestException('track metadata is invalid.');
+    }
+
+    const audioUrl = await this.uploadToStorage({
+      buffer: input.audio.buffer,
+      contentType: input.audio.mimetype || 'application/octet-stream',
+      fileName: input.audio.originalname,
+      folder: `tracks/${userId}`,
+    });
+    const track: TrackSummary = {
+      id: `upload-${randomUUID()}`,
+      title,
+      artistName,
+      coverUrl: input.coverUrl || null,
+      audioUrl,
+      durationSeconds: Math.max(1, Math.round(input.durationSeconds)),
+    };
+
+    if (input.selectedFolder !== undefined) {
+      await this.prisma.userLibraryState.upsert({
+        where: { userId },
+        update: { selectedFolder: input.selectedFolder || null },
+        create: { userId, selectedFolder: input.selectedFolder || null },
+      });
+    }
+
+    await this.upsertUploadedTrack(userId, track);
+    return this.getState(userId);
+  }
+
   async toggleFollowArtist(userId: string, artistId: string) {
     this.assertNonEmpty('artistId', artistId);
     await this.assertUser(userId);
@@ -244,6 +303,42 @@ export class LibraryService {
       .replace(/^-+|-+$/g, '')
       .slice(-16);
     return `${normalizedTitle || 'track'}-${normalizedId || Date.now()}`;
+  }
+
+  private async uploadToStorage(input: {
+    buffer: Buffer;
+    contentType: string;
+    fileName: string;
+    folder: string;
+  }) {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'tracks';
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new BadRequestException('Supabase Storage is not configured.');
+    }
+
+    const extension = input.fileName.includes('.') ? input.fileName.split('.').pop() : 'bin';
+    const objectPath = `${input.folder}/${randomUUID()}.${extension}`;
+    const uploadUrl = `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/${bucket}/${objectPath}`;
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': input.contentType,
+        apikey: serviceRoleKey,
+        'x-upsert': 'true',
+      },
+      body: new Uint8Array(input.buffer),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new BadRequestException(`Could not upload audio to storage. ${detail}`.trim());
+    }
+
+    return `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/${bucket}/${objectPath}`;
   }
 
   private assertNonEmpty(field: string, value: string) {
