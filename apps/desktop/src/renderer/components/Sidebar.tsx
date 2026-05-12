@@ -3,6 +3,7 @@ import {
   Expand,
   Grid2X2,
   Heart,
+  Import,
   LayoutGrid,
   Library,
   List,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { Playlist } from '../stores/libraryStore';
 import type { View } from '../types';
+import { DEFAULT_COVER_URL } from '../utils/assets';
 
 export type LibrarySortBy = 'recent' | 'recent_added' | 'alphabetical' | 'creator' | 'custom';
 export type LibraryViewMode = 'compact' | 'list' | 'grid' | 'small_grid';
@@ -152,12 +154,17 @@ export function Sidebar({
             </span>
           </button>
 
-          <button className="library-item" onClick={onImportLocalMusic}>
-            <img src="/assets/covers/poster.png" alt="" />
+          <button className="library-item" onClick={() => onSelectView('Uploads')}>
+            <img src={DEFAULT_COVER_URL} alt="" />
             <span>
               <strong>Uploads</strong>
               <small>Nhạc local • {uploadCount} bài hát</small>
             </span>
+          </button>
+
+          <button className="library-upload-button" onClick={onImportLocalMusic}>
+            <Import size={16} />
+            <span>Upload music</span>
           </button>
 
           {playlists.map((playlist) => (

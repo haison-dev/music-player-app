@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { TrackSummary } from '@music/shared';
 import { usePlayerStore } from '../stores/playerStore';
+import { resolveAssetUrl, resolveLocalFileUrl } from '../utils/assets';
 
 export function useAudioPlayer(allTracks: TrackSummary[]) {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -37,15 +38,11 @@ export function useAudioPlayer(allTracks: TrackSummary[]) {
       return;
     }
 
-    audio.src = activeTrack.audioUrl;
+    audio.src = resolveAssetUrl(resolveLocalFileUrl(activeTrack.audioUrl), '');
     audio.volume = volume;
     setCurrentTime(0);
     setDuration(activeTrack.durationSeconds);
-
-    if (isPlaying) {
-      void audio.play().catch(() => setPlaying(false));
-    }
-  }, [activeTrack, isPlaying, setPlaying, volume]);
+  }, [activeTrack]);
 
   useEffect(() => {
     const audio = audioRef.current;

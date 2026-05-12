@@ -1,7 +1,15 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { IsObject, IsOptional, IsString, MinLength } from 'class-validator';
 import type { TrackSummary } from '@music/shared';
 import { LibraryService } from './library.service';
+
+type UploadedAudioFile = {
+  buffer: Buffer;
+  mimetype: string;
+  originalname: string;
+  size: number;
+};
 
 class UserQueryDto {
   @IsString()
@@ -36,6 +44,28 @@ class FolderDto extends UserQueryDto {
 class UploadTrackDto extends UserQueryDto {
   @IsObject()
   track!: TrackSummary;
+}
+
+class UploadAudioDto extends UserQueryDto {
+  @IsString()
+  @MinLength(1)
+  title!: string;
+
+  @IsString()
+  @MinLength(1)
+  artistName!: string;
+
+  @IsString()
+  @MinLength(1)
+  durationSeconds!: string;
+
+  @IsOptional()
+  @IsString()
+  coverUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  selectedFolder?: string;
 }
 
 class ToggleFollowDto extends UserQueryDto {
@@ -85,6 +115,19 @@ export class LibraryController {
   @Post('uploads')
   uploadTrack(@Body() body: UploadTrackDto) {
     return this.libraryService.upsertUploadedTrack(body.userId, body.track);
+  }
+
+  @Post('uploads/audio')
+  @UseInterceptors(FileInterceptor('audio'))
+  uploadAudio(@Body() body: UploadAudioDto, @UploadedFile() audio: UploadedAudioFile) {
+    return this.libraryService.uploadAudioFile(body.userId, {
+      audio,
+      artistName: body.artistName,
+      coverUrl: body.coverUrl,
+      durationSeconds: Number(body.durationSeconds),
+      selectedFolder: body.selectedFolder,
+      title: body.title,
+    });
   }
 
   @Post('follows/toggle')

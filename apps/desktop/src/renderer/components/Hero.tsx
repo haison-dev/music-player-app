@@ -2,6 +2,7 @@ import type { AuthUser } from '../stores/authStore';
 import type { Playlist } from '../stores/libraryStore';
 import type { View } from '../types';
 import type { TrackSummary } from '@music/shared';
+import { DEFAULT_COVER_URL, resolveAssetUrl } from '../utils/assets';
 import { formatDuration } from '../utils/formatDuration';
 
 type HeroProps = {
@@ -32,9 +33,9 @@ export function Hero({ activePlaylist, activeView, notice, selectedFolder, track
     <section className="hero playlist-hero">
       <div className="playlist-cover-stack">
         {tracks.slice(0, 4).map((track) => (
-          <img key={track.id} src={track.coverUrl || '/assets/covers/poster.png'} alt="" />
+          <img key={track.id} src={resolveAssetUrl(track.coverUrl)} alt="" />
         ))}
-        {tracks.length === 0 && <img src="/assets/covers/poster.png" alt="" />}
+        {tracks.length === 0 && <img src={DEFAULT_COVER_URL} alt="" />}
       </div>
       <div className="hero-copy">
         <p className="eyebrow">{activeView === 'Playlist' || activeView === 'Liked Tracks' ? 'Danh sách phát công khai' : 'Danh sách phát'}</p>

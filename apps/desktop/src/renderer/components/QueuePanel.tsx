@@ -1,5 +1,6 @@
 import { ListMusic, PanelRightClose } from 'lucide-react';
 import type { TrackSummary } from '@music/shared';
+import { resolveAssetUrl } from '../utils/assets';
 
 type QueuePanelProps = {
   activeTrack: TrackSummary;
@@ -22,7 +23,7 @@ export function QueuePanel({ activeTrack, queue, tracks, onClose, onPlayTrack }:
         </div>
       </div>
       <div className="now-card spotlight-card">
-        <img src={activeTrack.coverUrl || '/assets/covers/poster.png'} alt="" />
+        <img src={resolveAssetUrl(activeTrack.coverUrl)} alt="" />
         <div className="spotlight-meta">
           <strong>{activeTrack.title}</strong>
           <span>{activeTrack.artistName}</span>
@@ -36,7 +37,7 @@ export function QueuePanel({ activeTrack, queue, tracks, onClose, onPlayTrack }:
             key={track.id}
             onClick={() => onPlayTrack(track)}
           >
-            <img src={track.coverUrl || '/assets/covers/poster.png'} alt="" />
+            <img src={resolveAssetUrl(track.coverUrl)} alt="" />
             <span>{track.title}</span>
           </button>
         ))}
