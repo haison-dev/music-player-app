@@ -4,7 +4,6 @@ import type { Playlist } from '../stores/libraryStore';
 import type { View } from '../types';
 
 type UseTrackViewsParams = {
-  apiTracks: TrackSummary[];
   uploadedTracks: TrackSummary[];
   query: string;
   activeView: View;
@@ -14,7 +13,6 @@ type UseTrackViewsParams = {
 };
 
 export function useTrackViews({
-  apiTracks,
   uploadedTracks,
   query,
   activeView,
@@ -25,9 +23,9 @@ export function useTrackViews({
   const allTracks = useMemo(() => {
     const byId = new Map<string, TrackSummary>();
 
-    [...apiTracks, ...uploadedTracks].forEach((track) => byId.set(track.id, track));
+    uploadedTracks.forEach((track) => byId.set(track.id, track));
     return [...byId.values()];
-  }, [apiTracks, uploadedTracks]);
+  }, [uploadedTracks]);
 
   const activePlaylist = playlists.find((playlist) => playlist.id === activePlaylistId) ?? null;
 

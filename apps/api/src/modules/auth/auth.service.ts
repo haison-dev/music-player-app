@@ -2,10 +2,14 @@ import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/
 import { randomBytes, timingSafeEqual, pbkdf2Sync } from 'node:crypto';
 import type { User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthTokenService } from './auth-token.service';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly authTokenService: AuthTokenService,
+  ) {}
 
   async register(input: { email: string; username: string; displayName?: string; password: string }) {
     const email = input.email.trim().toLowerCase();
@@ -40,6 +44,7 @@ export class AuthService {
 
     return {
       user: this.toPublicUser(user),
+      accessToken: this.authTokenService.sign(user.id),
       message: 'Registered successfully.',
     };
   }
@@ -54,6 +59,7 @@ export class AuthService {
 
     return {
       user: this.toPublicUser(user),
+      accessToken: this.authTokenService.sign(user.id),
       message: 'Logged in successfully.',
     };
   }

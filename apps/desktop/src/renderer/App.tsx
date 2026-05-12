@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import type { TrackSummary } from '@music/shared';
 import { AuthModal } from './components/AuthModal';
@@ -11,13 +10,11 @@ import { Sidebar, type LibrarySortBy, type LibraryViewMode } from './components/
 import { Topbar } from './components/Topbar';
 import { TrackTable } from './components/TrackTable';
 import { UserProfile } from './components/UserProfile';
-import { fallbackTracks } from './data/fallbackTracks';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { useTrackViews } from './hooks/useTrackViews';
 import {
   addTrackToPlaylistApi,
   createPlaylistApi,
-  getFeaturedTracks,
   getLibraryState,
   loginAccount,
   registerAccount,
@@ -66,17 +63,9 @@ function App() {
     selectedFolder,
     followedArtistIds,
   } = useLibraryStore();
-  const tracksQuery = useQuery<TrackSummary[]>({
-    queryKey: ['featured-tracks'],
-    queryFn: getFeaturedTracks,
-    retry: 1,
-  });
-
-  const apiTracks = tracksQuery.data?.length ? tracksQuery.data : fallbackTracks;
   const { activePlaylist, allTracks, visibleTracks } = useTrackViews({
     activePlaylistId,
     activeView,
-    apiTracks,
     likedTrackIds,
     playlists,
     query,
@@ -113,7 +102,7 @@ function App() {
       return;
     }
 
-    void getLibraryState(user.id)
+    void getLibraryState(user.token)
       .then(syncLibraryState)
       .catch(() => {
         setNotice('Không thể tải thư viện cloud. Đang dùng dữ liệu cục bộ.');
@@ -200,7 +189,7 @@ function App() {
     }
 
     const selectedFolder = audioFiles[0]?.filePath.replace(/\\/g, '/').split('/').slice(0, -1).join('/') ?? null;
-    const nextFolderState = await setSelectedFolderApi(user.id, selectedFolder);
+    const nextFolderState = await setSelectedFolderApi(user.token, selectedFolder);
     syncLibraryState(nextFolderState);
     for (const audioFile of audioFiles) {
       const filePath = audioFile.filePath;
@@ -219,7 +208,7 @@ function App() {
         selectedFolder,
         title: audioFile.title || title || stem,
         artistName: audioFile.artistName || artistName || 'Local Artist',
-        userId: user.id,
+        accessToken: user.token,
       });
       syncLibraryState(nextUploadState);
     }
@@ -245,12 +234,12 @@ function App() {
       return;
     }
 
-    if (!user?.id) {
+    if (!user?.token) {
       setAuthOpen(true);
       return;
     }
 
-    void addTrackToPlaylistApi(user.id, playlistId, pendingTrack.id).then((state) => {
+    void addTrackToPlaylistApi(user.token, playlistId, pendingTrack.id).then((state) => {
       syncLibraryState(state);
       closePlaylistModal();
       setNotice('Track added to playlist.');
@@ -277,6 +266,7 @@ function App() {
             id: result.user.id,
             displayName: result.user.displayName,
             email: result.user.email,
+            token: result.accessToken,
           },
         });
       } else {
@@ -286,6 +276,7 @@ function App() {
             id: result.user.id,
             displayName: result.user.displayName,
             email: result.user.email,
+            token: result.accessToken,
           },
         });
       }
@@ -319,13 +310,13 @@ function App() {
 
   async function handleSubmitPlaylist(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!user?.id) {
+    if (!user?.token) {
       setAuthMode('login');
       setAuthOpen(true);
       return;
     }
     try {
-      const result = await createPlaylistApi(user.id, playlistName);
+      const result = await createPlaylistApi(user.token, playlistName);
       syncLibraryState(result.state);
       setPlaylistName('');
       closePlaylistModal();
@@ -337,22 +328,22 @@ function App() {
   }
 
   async function handleToggleLike(trackId: string) {
-    if (!user?.id) {
+    if (!user?.token) {
       setAuthMode('login');
       setAuthOpen(true);
       return;
     }
-    const state = await toggleLikeTrack(user.id, trackId);
+    const state = await toggleLikeTrack(user.token, trackId);
     syncLibraryState(state);
   }
 
   async function handleRemoveFromPlaylist(playlistId: string, trackId: string) {
-    if (!user?.id) {
+    if (!user?.token) {
       setAuthMode('login');
       setAuthOpen(true);
       return;
     }
-    const state = await removeTrackFromPlaylistApi(user.id, playlistId, trackId);
+    const state = await removeTrackFromPlaylistApi(user.token, playlistId, trackId);
     syncLibraryState(state);
   }
 
@@ -511,7 +502,7 @@ function App() {
             />
             <TrackTable
               activePlaylist={activePlaylist}
-              activeTrackId={activeTrack.id}
+              activeTrackId={activeTrack?.id ?? ''}
               activeView={activeView}
               isMoreMenuOpen={isPlaylistMoreOpen}
               isViewMenuOpen={isPlaylistViewOpen}
@@ -519,7 +510,6 @@ function App() {
               tracks={visibleTracks}
               onAddToPlaylist={openAddToPlaylist}
               onPlayTrack={player.playTrack}
-              onRefresh={() => tracksQuery.refetch()}
               onRemoveFromPlaylist={handleRemoveFromPlaylist}
               onShuffle={() => {
                 player.toggleShuffleMode();
@@ -542,12 +532,16 @@ function App() {
               }}
               onImportLocalMusic={importLocalMusic}
               onFollowArtist={() => {
-                if (!user?.id) {
+                if (!user?.token) {
                   setAuthOpen(true);
                   return;
                 }
+                if (!activeTrack) {
+                  setNotice('Chua co bai hat nao de theo doi nghe si.');
+                  return;
+                }
                 const artistId = activeTrack.artistName.toLowerCase().replace(/\s+/g, '-');
-                void toggleFollowArtistApi(user.id, artistId).then((payload) => {
+                void toggleFollowArtistApi(user.token, artistId).then((payload) => {
                   syncLibraryState(payload.state);
                   setNotice(payload.followed ? 'Đã theo dõi nghệ sĩ.' : 'Đã bỏ theo dõi nghệ sĩ.');
                 });
@@ -565,7 +559,7 @@ function App() {
         )}
       </main>
 
-      {isNowPlayingOpen && (
+      {isNowPlayingOpen && activeTrack && (
         <QueuePanel
           activeTrack={activeTrack}
           queue={player.queue}
@@ -575,6 +569,7 @@ function App() {
         />
       )}
 
+      {activeTrack && (
       <PlayerBar
         activeDuration={player.activeDuration}
         activeTrack={activeTrack}
@@ -597,8 +592,9 @@ function App() {
         }}
         onTogglePlay={player.togglePlay}
       />
+      )}
 
-      {!isNowPlayingOpen && (
+      {!isNowPlayingOpen && activeTrack && (
         <button className="now-playing-toggle" onClick={() => setNowPlayingOpen(true)}>
           Show now playing
         </button>
