@@ -1,0 +1,10 @@
+ALTER TABLE "PlaylistTrack"
+ADD CONSTRAINT "PlaylistTrack_trackId_fkey"
+FOREIGN KEY ("trackId") REFERENCES "Track"("id")
+ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "TrackLike"
+ADD CONSTRAINT "TrackLike_trackId_fkey"
+FOREIGN KEY ("trackId") REFERENCES "Track"("id")
+ON DELETE CASCADE ON UPDATE CASCADE;
+

@@ -68,6 +68,7 @@ export class LibraryService {
   async toggleLike(userId: string, trackId: string) {
     this.assertNonEmpty('trackId', trackId);
     await this.assertUser(userId);
+    await this.assertTrackOwnership(userId, trackId);
 
     const existing = await this.prisma.trackLike.findUnique({
       where: { userId_trackId: { userId, trackId } },
@@ -104,6 +105,7 @@ export class LibraryService {
     this.assertNonEmpty('playlistId', playlistId);
     this.assertNonEmpty('trackId', trackId);
     await this.assertPlaylistOwner(userId, playlistId);
+    await this.assertTrackOwnership(userId, trackId);
 
     const lastTrack = await this.prisma.playlistTrack.findFirst({
       where: { playlistId },
@@ -283,6 +285,17 @@ export class LibraryService {
 
     if (!playlist) {
       throw new NotFoundException('Playlist was not found.');
+    }
+  }
+
+  private async assertTrackOwnership(userId: string, trackId: string) {
+    const track = await this.prisma.track.findFirst({
+      where: { id: trackId, ownerId: userId },
+      select: { id: true },
+    });
+
+    if (!track) {
+      throw new NotFoundException('Track was not found.');
     }
   }
 
