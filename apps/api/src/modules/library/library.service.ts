@@ -1,16 +1,18 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { TrackSummary } from '@music/shared';
+import type { Playlist, Track } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 
-type Playlist = {
+type PlaylistDto = {
   id: string;
   name: string;
   trackIds: string[];
   createdAt: string;
 };
 
-type LibraryState = {
+type LibraryStateDto = {
   likedTrackIds: string[];
-  playlists: Playlist[];
+  playlists: PlaylistDto[];
   uploadedTracks: TrackSummary[];
   selectedFolder: string | null;
   followedArtistIds: string[];
@@ -18,109 +20,230 @@ type LibraryState = {
 
 @Injectable()
 export class LibraryService {
-  private readonly states = new Map<string, LibraryState>();
+  constructor(private readonly prisma: PrismaService) {}
 
-  getState(userId: string): LibraryState {
-    return this.ensureState(userId);
+  async getState(userId: string): Promise<LibraryStateDto> {
+    await this.assertUser(userId);
+
+    const [likes, playlists, uploadedTracks, libraryState, artistFollows] = await Promise.all([
+      this.prisma.trackLike.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: { trackId: true },
+      }),
+      this.prisma.playlist.findMany({
+        where: { ownerId: userId },
+        orderBy: { createdAt: 'desc' },
+        include: { tracks: { orderBy: { position: 'asc' }, select: { trackId: true } } },
+      }),
+      this.prisma.track.findMany({
+        where: { ownerId: userId },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.userLibraryState.findUnique({ where: { userId } }),
+      this.prisma.artistFollow.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: { artistId: true },
+      }),
+    ]);
+
+    return {
+      likedTrackIds: likes.map((like) => like.trackId),
+      playlists: playlists.map((playlist) => this.toPlaylistDto(playlist)),
+      uploadedTracks: uploadedTracks.map((track) => this.toTrackSummary(track)),
+      selectedFolder: libraryState?.selectedFolder ?? null,
+      followedArtistIds: artistFollows.map((follow) => follow.artistId),
+    };
   }
 
-  toggleLike(userId: string, trackId: string) {
+  async toggleLike(userId: string, trackId: string) {
     this.assertNonEmpty('trackId', trackId);
-    const state = this.ensureState(userId);
-    const hasLike = state.likedTrackIds.includes(trackId);
-    state.likedTrackIds = hasLike
-      ? state.likedTrackIds.filter((id) => id !== trackId)
-      : [...state.likedTrackIds, trackId];
-    return state;
+    await this.assertUser(userId);
+
+    const existing = await this.prisma.trackLike.findUnique({
+      where: { userId_trackId: { userId, trackId } },
+    });
+
+    if (existing) {
+      await this.prisma.trackLike.delete({ where: { userId_trackId: { userId, trackId } } });
+    } else {
+      await this.prisma.trackLike.create({ data: { userId, trackId } });
+    }
+
+    return this.getState(userId);
   }
 
-  createPlaylist(userId: string, name: string) {
-    const state = this.ensureState(userId);
+  async createPlaylist(userId: string, name: string) {
+    await this.assertUser(userId);
     this.assertNonEmpty('name', name);
     const normalizedName = name.trim();
 
-    if (!normalizedName) {
-      throw new BadRequestException('Playlist name is required.');
-    }
-
-    const playlist: Playlist = {
-      id: `playlist-${Date.now()}`,
-      name: normalizedName,
-      trackIds: [],
-      createdAt: new Date().toISOString(),
-    };
-
-    state.playlists = [...state.playlists, playlist];
-    return { playlist, state };
-  }
-
-  addTrackToPlaylist(userId: string, playlistId: string, trackId: string) {
-    this.assertNonEmpty('playlistId', playlistId);
-    this.assertNonEmpty('trackId', trackId);
-    const state = this.ensureState(userId);
-    state.playlists = state.playlists.map((playlist) => {
-      if (playlist.id !== playlistId || playlist.trackIds.includes(trackId)) {
-        return playlist;
-      }
-      return { ...playlist, trackIds: [...playlist.trackIds, trackId] };
+    const playlist = await this.prisma.playlist.create({
+      data: {
+        title: normalizedName,
+        ownerId: userId,
+      },
     });
-    return state;
+
+    return {
+      playlist: this.toPlaylistDto({ ...playlist, tracks: [] }),
+      state: await this.getState(userId),
+    };
   }
 
-  removeTrackFromPlaylist(userId: string, playlistId: string, trackId: string) {
+  async addTrackToPlaylist(userId: string, playlistId: string, trackId: string) {
     this.assertNonEmpty('playlistId', playlistId);
     this.assertNonEmpty('trackId', trackId);
-    const state = this.ensureState(userId);
-    state.playlists = state.playlists.map((playlist) =>
-      playlist.id === playlistId ? { ...playlist, trackIds: playlist.trackIds.filter((id) => id !== trackId) } : playlist,
-    );
-    return state;
+    await this.assertPlaylistOwner(userId, playlistId);
+
+    const lastTrack = await this.prisma.playlistTrack.findFirst({
+      where: { playlistId },
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    });
+
+    await this.prisma.playlistTrack.upsert({
+      where: { playlistId_trackId: { playlistId, trackId } },
+      update: {},
+      create: {
+        playlistId,
+        trackId,
+        position: (lastTrack?.position ?? -1) + 1,
+      },
+    });
+
+    return this.getState(userId);
   }
 
-  setSelectedFolder(userId: string, folder: string | null) {
-    const state = this.ensureState(userId);
-    state.selectedFolder = folder;
-    return state;
+  async removeTrackFromPlaylist(userId: string, playlistId: string, trackId: string) {
+    this.assertNonEmpty('playlistId', playlistId);
+    this.assertNonEmpty('trackId', trackId);
+    await this.assertPlaylistOwner(userId, playlistId);
+
+    await this.prisma.playlistTrack.deleteMany({
+      where: { playlistId, trackId },
+    });
+
+    return this.getState(userId);
   }
 
-  upsertUploadedTrack(userId: string, track: TrackSummary) {
-    if (!track || !track.id || !track.title || !track.artistName) {
+  async setSelectedFolder(userId: string, folder: string | null) {
+    await this.assertUser(userId);
+
+    await this.prisma.userLibraryState.upsert({
+      where: { userId },
+      update: { selectedFolder: folder },
+      create: { userId, selectedFolder: folder },
+    });
+
+    return this.getState(userId);
+  }
+
+  async upsertUploadedTrack(userId: string, track: TrackSummary) {
+    await this.assertUser(userId);
+
+    if (!track || !track.id || !track.title || !track.artistName || !track.audioUrl) {
       throw new BadRequestException('track payload is invalid.');
     }
-    const state = this.ensureState(userId);
-    const exists = state.uploadedTracks.some((item) => item.id === track.id);
-    if (!exists) {
-      state.uploadedTracks = [...state.uploadedTracks, track];
-    }
-    return state;
+
+    await this.prisma.track.upsert({
+      where: { id: track.id },
+      update: {
+        title: track.title,
+        description: track.artistName,
+        durationSeconds: track.durationSeconds,
+        audioObjectKey: track.audioUrl,
+        coverObjectKey: track.coverUrl,
+      },
+      create: {
+        id: track.id,
+        title: track.title,
+        slug: this.slugForTrack(track),
+        description: track.artistName,
+        durationSeconds: track.durationSeconds,
+        visibility: 'PRIVATE',
+        audioObjectKey: track.audioUrl,
+        coverObjectKey: track.coverUrl,
+        ownerId: userId,
+      },
+    });
+
+    return this.getState(userId);
   }
 
-  toggleFollowArtist(userId: string, artistId: string) {
+  async toggleFollowArtist(userId: string, artistId: string) {
     this.assertNonEmpty('artistId', artistId);
-    const state = this.ensureState(userId);
-    const followed = state.followedArtistIds.includes(artistId);
-    state.followedArtistIds = followed
-      ? state.followedArtistIds.filter((id) => id !== artistId)
-      : [...state.followedArtistIds, artistId];
-    return { followed: !followed, state };
+    await this.assertUser(userId);
+
+    const existing = await this.prisma.artistFollow.findUnique({
+      where: { userId_artistId: { userId, artistId } },
+    });
+
+    if (existing) {
+      await this.prisma.artistFollow.delete({ where: { userId_artistId: { userId, artistId } } });
+    } else {
+      await this.prisma.artistFollow.create({ data: { userId, artistId } });
+    }
+
+    return { followed: !existing, state: await this.getState(userId) };
   }
 
-  private ensureState(userId: string): LibraryState {
+  private async assertUser(userId: string) {
     this.assertNonEmpty('userId', userId);
-    const normalizedId = userId.trim();
-    const current = this.states.get(normalizedId);
-    if (current) {
-      return current;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User was not found.');
     }
-    const initial: LibraryState = {
-      likedTrackIds: [],
-      playlists: [],
-      uploadedTracks: [],
-      selectedFolder: null,
-      followedArtistIds: [],
+  }
+
+  private async assertPlaylistOwner(userId: string, playlistId: string) {
+    await this.assertUser(userId);
+    const playlist = await this.prisma.playlist.findFirst({
+      where: { id: playlistId, ownerId: userId },
+      select: { id: true },
+    });
+
+    if (!playlist) {
+      throw new NotFoundException('Playlist was not found.');
+    }
+  }
+
+  private toPlaylistDto(playlist: Playlist & { tracks: Array<{ trackId: string }> }): PlaylistDto {
+    return {
+      id: playlist.id,
+      name: playlist.title,
+      trackIds: playlist.tracks.map((track) => track.trackId),
+      createdAt: playlist.createdAt.toISOString(),
     };
-    this.states.set(normalizedId, initial);
-    return initial;
+  }
+
+  private toTrackSummary(track: Track): TrackSummary {
+    return {
+      id: track.id,
+      title: track.title,
+      artistName: track.description || 'Local Artist',
+      coverUrl: track.coverObjectKey,
+      audioUrl: track.audioObjectKey,
+      durationSeconds: track.durationSeconds,
+    };
+  }
+
+  private slugForTrack(track: TrackSummary) {
+    const normalizedTitle = track.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    const normalizedId = track.id
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(-16);
+    return `${normalizedTitle || 'track'}-${normalizedId || Date.now()}`;
   }
 
   private assertNonEmpty(field: string, value: string) {
