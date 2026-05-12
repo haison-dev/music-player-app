@@ -1,7 +1,6 @@
 import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { IsObject, IsOptional, IsString, MinLength } from 'class-validator';
-import type { TrackSummary } from '@music/shared';
+import { IsOptional, IsString, MinLength } from 'class-validator';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUserId } from '../auth/current-user.decorator';
 import { LibraryService } from './library.service';
@@ -35,11 +34,6 @@ class FolderDto {
   @IsOptional()
   @IsString()
   folder!: string | null;
-}
-
-class UploadTrackDto {
-  @IsObject()
-  track!: TrackSummary;
 }
 
 class UploadAudioDto {
@@ -107,11 +101,6 @@ export class LibraryController {
   @Patch('selected-folder')
   setSelectedFolder(@CurrentUserId() userId: string, @Body() body: FolderDto) {
     return this.libraryService.setSelectedFolder(userId, body.folder ?? null);
-  }
-
-  @Post('uploads')
-  uploadTrack(@CurrentUserId() userId: string, @Body() body: UploadTrackDto) {
-    return this.libraryService.upsertUploadedTrack(userId, body.track);
   }
 
   @Post('uploads/audio')

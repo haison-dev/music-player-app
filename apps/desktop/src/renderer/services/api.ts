@@ -127,15 +127,6 @@ export async function setSelectedFolderApi(accessToken: string, folder: string |
   return parseResponse<LibraryStateDto>(response, 'Could not update selected folder.');
 }
 
-export async function uploadTrackApi(accessToken: string, track: TrackSummary) {
-  const response = await fetch(`${API_URL}/api/library/uploads`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
-    body: JSON.stringify({ track }),
-  });
-  return parseResponse<LibraryStateDto>(response, 'Could not upload local track.');
-}
-
 export async function uploadAudioFileApi(input: {
   artistName: string;
   audio: Blob;

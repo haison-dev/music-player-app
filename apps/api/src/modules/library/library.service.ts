@@ -148,7 +148,7 @@ export class LibraryService {
     return this.getState(userId);
   }
 
-  async upsertUploadedTrack(userId: string, track: TrackSummary) {
+  private async upsertUploadedTrack(userId: string, track: TrackSummary) {
     await this.assertUser(userId);
 
     if (!track || !track.id || !track.title || !track.artistName || !track.audioUrl) {
