@@ -15,22 +15,24 @@ enum TrackVisibility {
 }
 
 model User {
-  id           String             @id @default(cuid())
-  email        String             @unique
-  username     String             @unique
-  passwordHash String
-  displayName  String
-  avatarUrl    String?
-  bio          String?
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  tracks       Track[]
-  playlists    Playlist[]
-  likes        TrackLike[]
-  comments     Comment[]
-  followers    Follow[]           @relation("followers")
-  following    Follow[]           @relation("following")
-  history      ListeningHistory[]
+  id            String             @id @default(cuid())
+  email         String             @unique
+  username      String             @unique
+  passwordHash  String
+  displayName   String
+  avatarUrl     String?
+  bio           String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  tracks        Track[]
+  playlists     Playlist[]
+  likes         TrackLike[]
+  comments      Comment[]
+  followers     Follow[]           @relation("followers")
+  following     Follow[]           @relation("following")
+  history       ListeningHistory[]
+  libraryState  UserLibraryState?
+  artistFollows ArtistFollow[]
 }
 
 model Track {
@@ -47,8 +49,6 @@ model Track {
   owner           User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   albumId         String?
   album           Album?             @relation(fields: [albumId], references: [id])
-  playlistTracks  PlaylistTrack[]
-  likes           TrackLike[]
   comments        Comment[]
   history         ListeningHistory[]
   createdAt       DateTime           @default(now())
@@ -60,14 +60,14 @@ model Track {
 }
 
 model Album {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   title       String
   coverUrl    String?
   releaseDate DateTime?
   ownerId     String
   tracks      Track[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model Playlist {
@@ -89,10 +89,10 @@ model PlaylistTrack {
   position   Int
   addedAt    DateTime @default(now())
   playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  track      Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
 
   @@id([playlistId, trackId])
   @@index([position])
+  @@index([trackId])
 }
 
 model TrackLike {
@@ -100,9 +100,27 @@ model TrackLike {
   trackId   String
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
 
   @@id([userId, trackId])
+  @@index([trackId])
+}
+
+model UserLibraryState {
+  userId         String   @id
+  selectedFolder String?
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model ArtistFollow {
+  userId    String
+  artistId  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, artistId])
+  @@index([artistId])
 }
 
 model Comment {
@@ -127,12 +145,12 @@ model Follow {
 }
 
 model ListeningHistory {
-  id        String   @id @default(cuid())
-  userId    String
-  trackId   String
-  playedAt  DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  id       String   @id @default(cuid())
+  userId   String
+  trackId  String
+  playedAt DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
 
   @@index([userId, playedAt])
 }
