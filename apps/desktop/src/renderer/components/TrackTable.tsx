@@ -38,7 +38,6 @@ type TrackTableProps = {
   tracks: TrackSummary[];
   onAddToPlaylist: (track: TrackSummary) => void;
   onPlayTrack: (track: TrackSummary) => void;
-  onRefresh: () => void;
   onRemoveFromPlaylist: (playlistId: string, trackId: string) => void;
   onShuffle: () => void;
   onToggleLike: (trackId: string) => void;
@@ -74,7 +73,6 @@ export function TrackTable({
   tracks,
   onAddToPlaylist,
   onPlayTrack,
-  onRefresh,
   onRemoveFromPlaylist,
   onShuffle,
   onToggleLike,
