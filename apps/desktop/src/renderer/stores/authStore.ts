@@ -5,6 +5,7 @@ export type AuthUser = {
   id: string;
   displayName: string;
   email: string;
+  token: string;
 };
 
 type AuthState = {
@@ -37,6 +38,7 @@ export const useAuthStore = create<AuthState>()(
             id: `local-user-${email.toLowerCase()}`,
             displayName,
             email: email.toLowerCase(),
+            token: '',
           },
         });
       },
@@ -52,6 +54,7 @@ export const useAuthStore = create<AuthState>()(
             id: `local-user-${email.toLowerCase()}`,
             displayName: displayName.trim(),
             email: email.toLowerCase(),
+            token: '',
           },
         });
       },

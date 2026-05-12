@@ -155,27 +155,41 @@ export class LibraryService {
       throw new BadRequestException('track payload is invalid.');
     }
 
-    await this.prisma.track.upsert({
+    const existing = await this.prisma.track.findUnique({
       where: { id: track.id },
-      update: {
-        title: track.title,
-        description: track.artistName,
-        durationSeconds: track.durationSeconds,
-        audioObjectKey: track.audioUrl,
-        coverObjectKey: track.coverUrl,
-      },
-      create: {
-        id: track.id,
-        title: track.title,
-        slug: this.slugForTrack(track),
-        description: track.artistName,
-        durationSeconds: track.durationSeconds,
-        visibility: 'PRIVATE',
-        audioObjectKey: track.audioUrl,
-        coverObjectKey: track.coverUrl,
-        ownerId: userId,
-      },
+      select: { id: true, ownerId: true },
     });
+
+    if (existing && existing.ownerId !== userId) {
+      throw new BadRequestException('track does not belong to current user.');
+    }
+
+    if (existing) {
+      await this.prisma.track.update({
+        where: { id: track.id },
+        data: {
+          title: track.title,
+          description: track.artistName,
+          durationSeconds: track.durationSeconds,
+          audioObjectKey: track.audioUrl,
+          coverObjectKey: track.coverUrl,
+        },
+      });
+    } else {
+      await this.prisma.track.create({
+        data: {
+          id: track.id,
+          title: track.title,
+          slug: this.slugForTrack(track),
+          description: track.artistName,
+          durationSeconds: track.durationSeconds,
+          visibility: 'PRIVATE',
+          audioObjectKey: track.audioUrl,
+          coverObjectKey: track.coverUrl,
+          ownerId: userId,
+        },
+      });
+    }
 
     return this.getState(userId);
   }
